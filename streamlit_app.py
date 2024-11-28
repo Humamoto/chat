@@ -1,8 +1,6 @@
 import streamlit as st
-import pandas as pd
 from datetime import datetime
-import json
-import os
+import time
 
 # Configuração da página
 st.set_page_config(
@@ -11,26 +9,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicialização do histórico
+# Inicialização do estado global
 if 'messages' not in st.session_state:
     st.session_state.messages = []
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = time.time()
 
-# Função para salvar mensagens no log
-def save_to_log(message_data):
-    log_file = "chat_log.json"
-    try:
-        if os.path.exists(log_file):
-            with open(log_file, "r", encoding='utf-8') as f:
-                log = json.load(f)
-        else:
-            log = []
-        
-        log.append(message_data)
-        
-        with open(log_file, "w", encoding='utf-8') as f:
-            json.dump(log, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        st.error(f"Erro ao salvar log: {e}")
+# Função para adicionar mensagem
+def add_message(user, message):
+    st.session_state.messages.append({
+        "user": user,
+        "message": message,
+        "time": datetime.now().strftime("%H:%M:%S")
+    })
 
 # Interface principal
 st.title("💭 Chat em Tempo Real")
@@ -39,6 +30,7 @@ st.title("💭 Chat em Tempo Real")
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
 
+# Tela de login
 if not st.session_state.user_name:
     with st.form("login_form"):
         user_name = st.text_input("Digite seu nome para entrar no chat:")
@@ -55,27 +47,20 @@ if st.session_state.user_name:
     chat_container = st.container()
     
     with chat_container:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(f"{message['time']} - {message['user']}: {message['content']}")
+        for msg in st.session_state.messages:
+            st.write(f"[{msg['time']}] {msg['user']}: {msg['message']}")
     
     # Campo de mensagem
-    if message := st.chat_input("Digite sua mensagem..."):
-        # Criar dados da mensagem
-        message_data = {
-            "role": "user",
-            "user": st.session_state.user_name,
-            "content": message,
-            "time": datetime.now().strftime("%H:%M:%S")
-        }
-        
-        # Adicionar à lista de mensagens
-        st.session_state.messages.append(message_data)
-        
-        # Salvar no log
-        save_to_log(message_data)
-        
-        # Atualizar chat
+    message = st.text_input("Digite sua mensagem:", key="message_input")
+    if st.button("Enviar") or message:
+        if message:  # Verifica se a mensagem não está vazia
+            add_message(st.session_state.user_name, message)
+            st.session_state.messages = st.session_state.messages  # Força atualização
+            st.rerun()
+
+    # Atualização automática a cada 2 segundos
+    if time.time() - st.session_state.last_refresh > 2:
+        st.session_state.last_refresh = time.time()
         st.rerun()
 
 # Sidebar com opções
@@ -85,10 +70,13 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
     
-    # Exibir histórico de mensagens
-    st.title("Histórico")
-    if os.path.exists("chat_log.json"):
-        with open("chat_log.json", "r", encoding='utf-8') as f:
-            log = json.load(f)
-            df = pd.DataFrame(log)
-            st.dataframe(df[["time", "user", "content"]])
+    # Exibir número de mensagens
+    st.write(f"Total de mensagens: {len(st.session_state.messages)}")
+    
+    # Exibir usuários online
+    users = set(msg['user'] for msg in st.session_state.messages)
+    st.write(f"Usuários que participaram: {', '.join(users)}")
+
+# Rodapé
+st.markdown("---")
+st.markdown("Chat desenvolvido com Streamlit")
