@@ -1,6 +1,11 @@
 import streamlit as st
+import json
 from datetime import datetime
 import time
+import os
+
+MESSAGES_FILE = ".streamlit/messages.json"
+
 
 # Configuração da página
 st.set_page_config(
@@ -9,74 +14,71 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicialização do estado global
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'last_refresh' not in st.session_state:
-    st.session_state.last_refresh = time.time()
+# Função para carregar mensagens do arquivo
+def load_messages():
+    if not os.path.exists(MESSAGES_FILE):
+        os.makedirs(os.path.dirname(MESSAGES_FILE), exist_ok=True)
+        with open(MESSAGES_FILE, 'w') as f:
+            json.dump([], f)
+    with open(MESSAGES_FILE, 'r') as f:
+        return json.load(f)
 
-# Função para adicionar mensagem
-def add_message(user, message):
-    st.session_state.messages.append({
-        "user": user,
-        "message": message,
-        "time": datetime.now().strftime("%H:%M:%S")
+# Função para salvar mensagens no arquivo
+def save_message(username, message):
+    messages = load_messages()
+    messages.append({
+        'username': username,
+        'message': message,
+        'timestamp': datetime.now().strftime('%H:%M:%S')
     })
+    with open(MESSAGES_FILE, 'w') as f:
+        json.dump(messages, f)
 
-# Interface principal
-st.title("💭 Chat em Tempo Real")
 
-# Login do usuário
-if "user_name" not in st.session_state:
-    st.session_state.user_name = ""
+# Inicialização
+if 'username' not in st.session_state:
+    st.session_state.username = ''
+if 'last_message_count' not in st.session_state:
+    st.session_state.last_message_count = 0
 
-# Tela de login
-if not st.session_state.user_name:
-    with st.form("login_form"):
-        user_name = st.text_input("Digite seu nome para entrar no chat:")
-        submit = st.form_submit_button("Entrar")
-        if submit and user_name:
-            st.session_state.user_name = user_name
-            st.rerun()
+# Login
+if not st.session_state.username:
+    st.title('💭 Chat em Tempo Real')
+    username = st.text_input('Digite seu nome:')
+    if st.button('Entrar') and username:
+        st.session_state.username = username
+        st.rerun()
 
-# Interface do chat
-if st.session_state.user_name:
-    st.write(f"Bem-vindo(a), {st.session_state.user_name}! 👋")
+# Chat principal
+if st.session_state.username:
+    st.title(f'💭 Chat - {st.session_state.username}')
     
     # Área de mensagens
-    chat_container = st.container()
+    chat_placeholder = st.empty()
     
-    with chat_container:
-        for msg in st.session_state.messages:
-            st.write(f"[{msg['time']}] {msg['user']}: {msg['message']}")
-    
-    # Campo de mensagem
-    message = st.text_input("Digite sua mensagem:", key="message_input")
-    if st.button("Enviar") or message:
-        if message:  # Verifica se a mensagem não está vazia
-            add_message(st.session_state.user_name, message)
-            st.session_state.messages = st.session_state.messages  # Força atualização
-            st.rerun()
+    # Input de mensagem
+    with st.container():
+        message = st.text_input('Mensagem:', key='message_input')
+        if st.button('Enviar'):
+            if message:
+                save_message(st.session_state.username, message)
+                st.session_state.last_message_count += 1
+                st.rerun()
 
-    # Atualização automática a cada 2 segundos
-    if time.time() - st.session_state.last_refresh > 2:
-        st.session_state.last_refresh = time.time()
-        st.rerun()
+    # Atualização automática das mensagens
+    while True:
+        messages = load_messages()
+        if len(messages) > st.session_state.last_message_count:
+            with chat_placeholder.container():
+                for msg in messages:
+                    st.text(f"[{msg['timestamp']}] {msg['username']}: {msg['message']}")
+            st.session_state.last_message_count = len(messages)
+        time.sleep(1)
 
-# Sidebar com opções
+# Sidebar
 with st.sidebar:
-    st.title("Opções")
-    if st.button("Limpar Chat"):
-        st.session_state.messages = []
+    st.title('Opções')
+    if st.button('Limpar Chat'):
+        with open('messages.json', 'w') as f:
+            json.dump([], f)
         st.rerun()
-    
-    # Exibir número de mensagens
-    st.write(f"Total de mensagens: {len(st.session_state.messages)}")
-    
-    # Exibir usuários online
-    users = set(msg['user'] for msg in st.session_state.messages)
-    st.write(f"Usuários que participaram: {', '.join(users)}")
-
-# Rodapé
-st.markdown("---")
-st.markdown("Chat desenvolvido com Streamlit")
