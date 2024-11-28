@@ -46,17 +46,14 @@ BANNED_WORDS = ["palavrão1", "palavrão2", "palavrão3"]
 def init_db():
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
-    
-    # Tabela de mensagens
     c.execute('''CREATE TABLE IF NOT EXISTS messages
-                 (username TEXT, message TEXT, timestamp TEXT, is_private INTEGER, recipient TEXT)''')
-    
-    # Tabela de status dos usuários
-    c.execute('''CREATE TABLE IF NOT EXISTS user_status
-                 (username TEXT PRIMARY KEY, last_seen TEXT)''')
-    
+                 (username TEXT, message TEXT, timestamp TEXT, 
+                  is_private INTEGER DEFAULT 0, 
+                  recipient TEXT DEFAULT NULL)''')
     conn.commit()
     conn.close()
+
+
 
 def save_message(username, message, is_private=False, recipient=None):
     if not is_appropriate(message):
@@ -73,13 +70,19 @@ def save_message(username, message, is_private=False, recipient=None):
     return True
 
 def load_messages():
-    conn = sqlite3.connect('chat.db')
-    c = conn.cursor()
-    c.execute("""SELECT username, message, timestamp, is_private, recipient 
-                 FROM messages ORDER BY timestamp""")
-    messages = c.fetchall()
-    conn.close()
-    return messages
+    try:
+        conn = sqlite3.connect('chat.db')
+        c = conn.cursor()
+        c.execute("""SELECT username, message, timestamp, is_private, recipient 
+                    FROM messages ORDER BY timestamp""")
+        messages = c.fetchall()
+        conn.close()
+        return messages
+    except sqlite3.OperationalError:
+        st.error("Erro ao acessar o banco de dados")
+        return []
+
+
 
 def update_user_status(username):
     conn = sqlite3.connect('chat.db')
